@@ -2,6 +2,7 @@ module Main (main) where
 
 import qualified Day1
 import qualified Day2
+import qualified Day3
 
 main :: IO ()
 main = do
@@ -13,3 +14,7 @@ main = do
     Day2.part1 >>= print
     putStr "The answer to Day 2, part 2 is "
     Day2.part2 >>= print
+    putStr "The answer to Day 3, part 1 is "
+    Day3.part1 >>= print
+    putStr "The answer to Day 3, part 2 is "
+    Day3.part2 >>= print
