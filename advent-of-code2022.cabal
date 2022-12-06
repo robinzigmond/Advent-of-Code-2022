@@ -30,6 +30,7 @@ library
       Day3
       Day4
       Day5
+      Day6
   other-modules:
       Paths_advent_of_code2022
   hs-source-dirs:
@@ -37,6 +38,7 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , containers
     , mtl
     , text
     , vector
@@ -52,6 +54,7 @@ executable advent-of-code2022-exe
   build-depends:
       advent-of-code2022
     , base >=4.7 && <5
+    , containers
     , mtl
     , text
     , vector
@@ -68,6 +71,7 @@ test-suite advent-of-code2022-test
   build-depends:
       advent-of-code2022
     , base >=4.7 && <5
+    , containers
     , mtl
     , text
     , vector
