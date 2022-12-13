@@ -26,6 +26,7 @@ dependencies:
 - vector
 - containers
 - microlens-platform
+- megaparsec
 
 ghc-options:
 - -Wall

@@ -29,6 +29,7 @@ library
       Day10
       Day11
       Day12
+      Day13
       Day2
       Day3
       Day4
@@ -45,6 +46,7 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
+    , megaparsec
     , microlens-platform
     , mtl
     , text
@@ -62,6 +64,7 @@ executable advent-of-code2022-exe
       advent-of-code2022
     , base >=4.7 && <5
     , containers
+    , megaparsec
     , microlens-platform
     , mtl
     , text
@@ -80,6 +83,7 @@ test-suite advent-of-code2022-test
       advent-of-code2022
     , base >=4.7 && <5
     , containers
+    , megaparsec
     , microlens-platform
     , mtl
     , text

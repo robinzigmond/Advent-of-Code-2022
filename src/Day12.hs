@@ -1,4 +1,4 @@
-module Day12 where
+module Day12 (part1, part2) where
 
 import Data.Text (Text)
 import qualified Data.Text as T (lines, unpack)
@@ -12,7 +12,7 @@ import qualified Data.Map as M (union, filter, singleton, fromList, keys, elems)
 
 newtype HeightMap = HeightMap (Vector (Vector Int))
 
-data Coord = Coord Int Int deriving (Eq, Ord, Show)
+data Coord = Coord Int Int deriving (Eq, Ord)
 
 -- arbitrarily use 101 for the start and 226 for the end, so that we can recognise the start
 -- and the end but reduce these numbers mod 100 to easily get the actual height
