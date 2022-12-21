@@ -111,7 +111,7 @@ updateState valves move state = let nowOpen = state ^. openValves
                                                                                                 else (toOpen : open)
                                     MoveTo newValve -> withCommonUpdates & currentValve .~ newValve
 
--- gets the max output for second of all valves. Very simple calculation but important to optimise
+-- gets the max output per second of all valves. Very simple calculation but important to optimise
 -- the brute-force recursive approach
 maxOutput :: [Valve] -> Int
 maxOutput = sum . map flowRate
