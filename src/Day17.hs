@@ -36,8 +36,7 @@ data FallingRockState = FallingRockState {
     _remainingMoves :: [Move],
     _currentFalling :: RockType,
     _currentFallingRef :: (Int, Int),
-    _numRocksStopped :: Int,
-    _isCompleteCyle :: Bool -- used in part 2
+    _numRocksStopped :: Int
 }
 
 makeLenses ''FallingRockState
@@ -55,16 +54,8 @@ getAllRocks xRef yRef ReverseL = [(xRef + 2, yRef + 2), (xRef + 2, yRef + 1), (x
 getAllRocks xRef yRef Vertical = [(xRef, yRef + 3), (xRef, yRef + 2), (xRef, yRef + 1), (xRef, yRef)]
 getAllRocks xRef yRef Square = [(xRef, yRef + 1), (xRef + 1, yRef + 1), (xRef, yRef), (xRef + 1, yRef)]
 
--- function to get the complete set (list) of points below the lowest points of the shape (based on the reference point)
--- which will be used to test whether the rock stops falling or not
-pointsToTest :: Int -> Int -> RockType -> [(Int, Int)]
-pointsToTest xRef yRef rock = let allRocks = getAllRocks xRef yRef rock
-                                  lowestY = minimum $ map snd allRocks
-                                  lowestRocks = filter ((== lowestY) . snd) allRocks
-                              in map (\(x, y) -> (x, y - 1)) lowestRocks
-
 isAvailable :: Cave -> Int -> Int -> Bool
--- note that we don't test for the cave floor (y = 0) here. This function is only called by
+-- note that we don't test for the cave floor (y = 0) here. That condition only matters for
 -- canRockFall and the "floor test" is in that function
 isAvailable cave x y = case M.lookup (x, y) (getCave cave) of
     Just Rock -> False
@@ -135,10 +126,8 @@ rockFallStep = do
             -- now check if we can still fall one step
             if canRockFall newXPos currentY rockType currentCave
                 -- if it can, move it down and we're done
-                -- (also set it to not a complete cycle, for part 2)
                 then do
                     currentFallingRef . _2 %= subtract 1
-                    isCompleteCyle .= False
                 else do
                     -- if not, then first "lock it in place" where it is
                     let updatedCave = addRock currentCave newXPos currentY rockType
@@ -149,8 +138,6 @@ rockFallStep = do
                     currentFalling .= nextRock
                     currentFallingRef .= startRef
                     numRocksStopped %= (+1)
-                    -- finally (for part 2) check if we've had a complete cyle
-                    isCompleteCyle .= (nextRock == minBound)
 
 -- uses the above to effectively solve part 1. Takes an int saying how many rocks we need to have completely fall,
 -- and the state calculation returns the Y position of the highest rock piece
@@ -169,7 +156,7 @@ startingState moves = let emptyCave = Cave M.empty
                           -- note that we use cycle on moves to make it an infinite repeating list.
                           -- Due to Haskell's laziness this is much more performant than continually
                           -- shuffling the first item of a long linked list to the end.
-                      in FallingRockState emptyCave (cycle moves) startingRock startRef 0 False
+                      in FallingRockState emptyCave (cycle moves) startingRock startRef 0
 
 solvePart1 :: [Move] -> Int
 solvePart1 = evalState (fallTillEnoughRocksStopped 2022) . startingState
@@ -177,49 +164,19 @@ solvePart1 = evalState (fallTillEnoughRocksStopped 2022) . startingState
 part1 :: IO Int
 part1 = fmap solvePart1 puzzleData
 
-{-Part 2 thoughts: naive brute force is infeasible. The number is appox 1 billion times larger.
-Even if after compiling part 1 came down to 0.1s, that's still 100 million seconds, or roughly 25000 hours...
-My only thought so far - and I think it *might* work and frankly can't think of anything else that might:
-- it might happen that at some point there is a "new floor" with a continues line of rock from (0, n) to
-(6, n) and nothing above. But that only actually helps if that happens at a point where:
-1) we've had a number of COMPLETE CYCLES of the 5 pieces
-2) (even less likely!) that happens after a number of complete cyles of the move sequence!
-IF all this falls into place, then after N pieces have been dropped we have that situation and the height is H,
-we take a multiple kN that is closest to the target (huge) number, and then the height will be kH, and we only have to
-run for a number of pieces that's below N.
-Unfortunately even if we get such a "new floor" situation, we can't assume it will happen again with any regularity if
-it doesn't line up with either the piece cycle or the move cycle.
+{-
+If this thing doesn't cycle with a complete "floor" at the right point (which it seems not), the only alternative must
+be some way to MASSIVELY shortcut the computation so we don't have to simulate every single step. Any ideas?
+Maybe somehow look ahead at the move sequence and quickly figure out where the next piece will end up?
+Not obvious how, as the precise alternation of down- and sideways-moves matters a lot - if we reorder them, the
+piece might stop falling sooner or later compared to the actual. And that in turn affects which move we start with for
+the next piece!
+But could there be something workable along these lines??
 -}
-
-hasMiracleRecurrence :: [Move] -> FallingRockState -> Maybe (Int, Int)
-hasMiracleRecurrence startingMoves state = if hasNewFloor && isOnFirstPiece && hasCycledMoves
-    then Just $ (state ^. numRocksStopped, highestPoint)
-    else Nothing
-        where isOnFirstPiece = state ^. isCompleteCyle
-              hasCycledMoves = take (length startingMoves) (state ^. remainingMoves) == startingMoves
-              currentCave = state ^. cave
-              highestPoint = highestYValue currentCave
-              highestPoints = filter ((== highestPoint) . snd) . M.keys $ getCave currentCave
-              hasNewFloor = length highestPoints == 7
-
---this doesn't actually work - not too surprising if the miracle never happens, but I need another idea!
-fallTillMiracle :: [Move] -> State FallingRockState (Int, Int)
-fallTillMiracle startingMoves = do
-    rockFallStep
-    state <- get
-    case hasMiracleRecurrence startingMoves state of
-        Nothing -> fallTillMiracle startingMoves
-        Just info -> return info
 
 -- Int should be 64 bit and therefore easily high enough for a trillion!
 solvePart2 :: [Move] -> Int
-solvePart2 moves = let (numRocks, highestPoint) = evalState (fallTillMiracle moves) (startingState moves)
-                       hugeNumber = 1000000000000
-                       divisor = hugeNumber `div` numRocks
-                       remaining = hugeNumber `mod` numRocks
-                       heightAfterCompleteCycles = divisor * highestPoint
-                       remainingHeight = evalState (fallTillEnoughRocksStopped remaining) (startingState moves)
-                   in heightAfterCompleteCycles + remainingHeight
+solvePart2 = error "TODO"
 
 part2 :: IO Int
 part2 = fmap solvePart2 puzzleData
