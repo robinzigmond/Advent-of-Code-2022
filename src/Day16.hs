@@ -1,13 +1,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Day16 where
+module Day16 (part1, part2) where
 
 import Data.Text (Text)
 import qualified Data.Text as T (lines, words, init, drop, unpack, take)
 import qualified Data.Text.IO as TIO (readFile)
-import Lens.Micro.Platform (makeLenses, (&), (^.), (%~), (.~))
+import Lens.Micro.Platform (makeLenses, (&), (^.), (%~), (.~), _1, _2)
 import Data.List (find)
+import Data.Maybe (fromJust)
 
 data Valve = Valve { key :: Text, flowRate :: Int, links :: [Text] } deriving Show
 
@@ -104,7 +105,7 @@ pathSearch valves state = go valves state Nothing
                 allAreOpen = length (filter ((/= 0) . flowRate) valves) == length nowOpen
                 (impossibleToBeat, actualMax) = case maybeBestSoFar of
                     Nothing -> (False, 0) -- "actualMax" value doesn't matter here!
-                    Just max -> (max > maxPossible, max)
+                    Just max -> (max >= maxPossible, max)
             in if impossibleToBeat
                 then actualMax
                 else if allAreOpen
@@ -132,12 +133,124 @@ solvePart1 = flip pathSearch startingState
 part1 :: IO Int
 part1 = fmap solvePart1 puzzleData
 
-{-
-No real ideas on part 2 yet, space reserved for some thoughts when I get round to it!
--}
+-- for part 2, adopt a similar approach but where we have 2 different "current valves"
 
+data CurrentState2 = CurrentState2 {
+    _minutesLeft2 :: Int,
+    _currentValve2 :: (Text, Text),
+    _openValves2 :: [Text],
+    _totalReleased2 :: Int,
+    _lastValve2 :: (Maybe Text, Maybe Text)
+}
+
+makeLenses ''CurrentState2
+
+-- all functions copy-pasted from above with the minimal adjustments needed to make work for this new type/situation
+
+startingState2 :: CurrentState2
+startingState2 = CurrentState2 26 ("AA", "AA") [] 0 (Nothing, Nothing)
+
+getPossibleMoves2 :: [Valve] -> CurrentState2 -> [(Move, Move)]
+getPossibleMoves2 valves state = let locations = state ^. currentValve2
+                                     location1 = locations ^. _1
+                                     location2 = locations ^. _2
+                                     nowOpen = state ^. openValves2
+                                     isOpen location = location `elem` nowOpen
+                                     maybePreviousValves = state ^. lastValve2
+                                     maybePreviousValve1 = maybePreviousValves ^. _1
+                                     maybePreviousValve2 = maybePreviousValves ^. _2
+                                     possibleMoves location = map MoveTo (getValveInfo valves links location)
+                                     -- an important optimisation is to rule out stepping immediately back to the valve
+                                     -- we just came from, without having opened anything
+                                     isSensible move maybeValue = case maybeValue of
+                                        Nothing -> True
+                                        Just previous -> case move of
+                                            OpenValve -> True
+                                            MoveTo destination -> previous /= destination
+                                     shouldTryOpening location = not (isOpen location)
+                                                                    && (getValveInfo valves flowRate location > 0)
+                                     possible1 = if shouldTryOpening location1
+                                                    then OpenValve : possibleMoves location1
+                                                    else possibleMoves location1
+                                     possible2 = if shouldTryOpening location2
+                                                    then OpenValve : possibleMoves location2
+                                                    else possibleMoves location2
+                                     -- one small adjustment for part 2 here: we may end up with one of the actors in a
+                                     -- "dead end", with no choice but to go back on themselves, without having "gone wrong"
+                                     -- at an earlier point. So we put the "impossible move" back in if there are no other moves.
+                                     actual1 = let firstTry = filter (flip isSensible maybePreviousValve1) possible1
+                                               in if null firstTry
+                                                    then [MoveTo $ fromJust maybePreviousValve1]
+                                                    else firstTry
+                                     actual2 = let firstTry = filter (flip isSensible maybePreviousValve2) possible2
+                                               in if null firstTry
+                                                    then [MoveTo $ fromJust maybePreviousValve2]
+                                                    else firstTry
+                                 in [(move1, move2) | move1 <- actual1, move2 <- actual2]
+
+updateState2 :: [Valve] -> (Move, Move) -> CurrentState2 -> CurrentState2
+updateState2 valves (move1, move2) state = let nowOpen = state ^. openValves2
+                                               totalToRelease = sum . map flowRate $ filter ((`elem` nowOpen) . key) valves
+                                               withCommonUpdates =
+                                                state & (minutesLeft2 %~ subtract 1) & (totalReleased2 %~ (+ totalToRelease))
+                                               location = withCommonUpdates ^. currentValve2
+                                               applyMove move isFirst old = case move of
+                                                OpenValve -> old & openValves2 %~
+                                                                (\open -> if isFirst
+                                                                            then if fst location `elem` open
+                                                                                    then open
+                                                                                    else (fst location : open)
+                                                                            else if snd location `elem` open
+                                                                                    then open
+                                                                                    else (snd location : open))
+                                                                       -- remove lastValve because it's legitimate to go back
+                                                                       -- after opening what may be a key valve
+                                                                       & lastValve2 %~ (\last -> if isFirst
+                                                                                                    then (Nothing, snd last)
+                                                                                                    else (fst last, Nothing))
+                                                MoveTo newValve -> old & currentValve2 %~ (\current -> if isFirst
+                                                                                                        then (newValve, snd current)
+                                                                                                        else (fst current, newValve))
+                                                                             & lastValve2 %~ (\last -> if isFirst
+                                                                                                        then (Just (fst location), snd last)
+                                                                                                        else (fst last, Just (snd location)))
+                                           in applyMove move2 False $ applyMove move1 True withCommonUpdates
+
+pathSearch2 :: [Valve] -> CurrentState2 -> Int
+pathSearch2 valves state = go valves state Nothing
+    where go :: [Valve] -> CurrentState2 -> Maybe Int -> Int
+          go valves state maybeBestSoFar = 
+            let timeLeft = state ^. minutesLeft2
+                nowOpen = state ^. openValves2
+                releasedSoFar = state ^. totalReleased2
+                maxPossible = releasedSoFar + timeLeft * maxOutput valves
+                allAreOpen = length (filter ((/= 0) . flowRate) valves) == length nowOpen
+                (impossibleToBeat, actualMax) = case maybeBestSoFar of
+                    Nothing -> (False, 0) -- "actualMax" value doesn't matter here!
+                    Just max -> (max >= maxPossible, max)
+            in if impossibleToBeat
+                then actualMax
+                else if allAreOpen
+                    then timeLeft * (sum $ map (getValveInfo valves flowRate) nowOpen) + releasedSoFar
+                    else if timeLeft == 0
+                        then releasedSoFar
+                        else let possibleMoves = getPossibleMoves2 valves state
+                                 nextStates = map (\move -> updateState2 valves move state) possibleMoves
+                                 depthFirst :: Maybe Int -> [CurrentState2] -> Int
+                                 depthFirst maybeBest states = case states of
+                                    [] -> error "shouldn't run out of moves now!"
+                                    [onlyMove] -> go valves onlyMove maybeBest
+                                    (firstChoice : otherChoices) ->
+                                        let resultOfFirst = go valves firstChoice maybeBest
+                                            newBest = case maybeBest of
+                                                        Nothing -> resultOfFirst
+                                                        Just oldBest -> max oldBest resultOfFirst
+                                        in depthFirst (Just newBest) otherChoices
+                             in depthFirst maybeBestSoFar nextStates
+
+-- runs about 2hrs 40 minutes: bad but good enough for me right now!
 solvePart2 :: [Valve] -> Int
-solvePart2 = error "TODO"
+solvePart2 = flip pathSearch2 startingState2
 
 part2 :: IO Int
 part2 = fmap solvePart2 puzzleData

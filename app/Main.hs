@@ -90,8 +90,8 @@ main = do
     Day15.part2 >>= print
     putStr "The answer to Day 16, part 1 is "
     Day16.part1 >>= print
-    {- putStr "The answer to Day 16, part 2 is "
-    Day16.part2 >>= print -}
+    putStr "The answer to Day 16, part 2 is "
+    Day16.part2 >>= print
     putStr "The answer to Day 17, part 1 is "
     Day17.part1 >>= print
     {-putStr "The answer to Day 17, part 2 is "
